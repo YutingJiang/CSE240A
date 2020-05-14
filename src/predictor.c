@@ -77,8 +77,8 @@ void
 init_gshare()
 {
   GHR = 0;
-  int global_size = int(pow(2, ghistoryBits));//initialize global branch history size
-  global_BHT = (uint8_t*)malloc(size * sizeof(uint8_t));//initialize global branch history table
+  int global_size = pow(2, ghistoryBits);//initialize global branch history size
+  global_BHT = (uint8_t*)malloc(global_size * sizeof(uint8_t));//initialize global branch history table
   for(int i = 0; i < global_size; i++){
     global_BHT[i] = WN;//initialize all the prediction to be Weak NotTaken
   }
@@ -88,9 +88,9 @@ void
 init_tournament()
 {
   GHR = 0;
-  int local_size = int(pow(2, lhistoryBits));//initialize local branch history table size
-  int global_size = int(pow(2, ghistoryBits));//initialize global branch history table  size
-  int pht_size = int(pow(2, pcIndexBits));//initialize pattern history table size
+  int local_size = pow(2, lhistoryBits);//initialize local branch history table size
+  int global_size = pow(2, ghistoryBits);//initialize global branch history table  size
+  int pht_size = pow(2, pcIndexBits);//initialize pattern history table size
   int selector_size = global_size;
   local_BHT = (uint8_t*)malloc(local_size * sizeof(uint8_t));//initialize local branch history table
   global_BHT = (uint8_t*)malloc(global_size * sizeof(uint8_t));//initialize global branch history table
@@ -99,7 +99,7 @@ init_tournament()
   for(int i = 0; i < global_size; i++){
     global_BHT[i] = WN;//initialize all the global prediction to be Weak NotTaken
   }
-  for(int i = 0; i < global_local; i++){
+  for(int i = 0; i < local_size; i++){
     local_BHT[i] = WN;//initialize all the local prediction to be Weak NotTaken
   }
   for(int i = 0; i < pht_size; i++){
@@ -153,10 +153,10 @@ predict_gshare(uint32_t pc)
     i++;
   }
   uint32_t res = (pc & filter) ^ (GHR & filter);
-  if(global_BHT[res] < WT){
-    return NOTTAKEN;
-  } else {
+  if(global_BHT[res] > WN){
     return TAKEN;
+  } else {
+    return NOTTAKEN;
   }
 }
 
@@ -221,16 +221,16 @@ train_gshare(uint32_t pc, uint8_t outcome)
     filter = (filter<<1) + 1;
   }
   uint32_t res = (pc & filter) ^ (GHR & filter);
-  if(outcome == NOTTAKEN) {
-    if(global_BHT[res] > SN) {
-      global_BHT[res]--;
-    }
-    GHR = (GHR<<1) & filter;
-  } else {
+  if(outcome == TAKEN) {
     if(global_BHT[res] < ST) {
       global_BHT[res]++;
     }
     GHR = ((GHR<<1) + 1) & filter;
+  } else {
+    if(global_BHT[res] > SN) {
+      global_BHT[res]--;
+    }
+    GHR = (GHR<<1) & filter;
   }
 }
 
@@ -253,16 +253,7 @@ train_tournament(uint32_t pc, uint8_t outcome)
   int local_prediction = local_BHT[val_PHT];
   int global_prediction = global_BHT[GHR];
   int res = selector[GHR];
-  if(outcome == NOTTAKEN) {
-    if((local_prediction < WT && global_prediction > WN) || (local_prediction > WN && global_prediction < WT)) { //When only one predictor makes the right prediction, change selector preference
-      if(local_prediction < WT && res > 0) selector[GHR]--;// if only local predictor is right, selector prefers it
-      else if(global_prediction < WT && res < 3) selector[GHR]++;// if only global predictor is right, selector prefers it
-    } 
-    if(local_prediction > SN) local_BHT[val_PHT]--; // update local BHT
-    if(global_prediction > SN) global_BHT[GHR]--;// update global BHT
-    PHT[(pc & filter_pc)] = (val_PHT << 1) & filter_pht;// update local pattern history table
-    GHR = (GHR << 1) & filter_ghr; // update global history register
-  } else {
+  if(outcome == TAKEN) {
     if((local_prediction < WT && global_prediction > WN) || (local_prediction > WN && global_prediction < WT)) { //When only one predictor makes the right prediction, change selector preference
       if(local_prediction > WN && res > 0) selector[GHR]--;// if only local predictor is right, selector prefers it
       else if(global_prediction > WN && res < 3) selector[GHR]++;// if only global predictor is right, selector prefers it
@@ -271,6 +262,15 @@ train_tournament(uint32_t pc, uint8_t outcome)
     if(global_prediction < ST) global_BHT[GHR]++;// update global BHT
     PHT[(pc & filter_pc)] = ((val_PHT << 1)+1) & filter_pht;// update local pattern history table
     GHR = ((GHR << 1)+1) & filter_ghr; // update global history register
+  } else {
+    if((local_prediction < WT && global_prediction > WN) || (local_prediction > WN && global_prediction < WT)) { //When only one predictor makes the right prediction, change selector preference
+      if(local_prediction < WT && res > 0) selector[GHR]--;// if only local predictor is right, selector prefers it
+      else if(global_prediction < WT && res < 3) selector[GHR]++;// if only global predictor is right, selector prefers it
+    } 
+    if(local_prediction > SN) local_BHT[val_PHT]--; // update local BHT
+    if(global_prediction > SN) global_BHT[GHR]--;// update global BHT
+    PHT[(pc & filter_pc)] = (val_PHT << 1) & filter_pht;// update local pattern history table
+    GHR = (GHR << 1) & filter_ghr; // update global history register
   }
 }
 
