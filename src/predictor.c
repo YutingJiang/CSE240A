@@ -253,8 +253,11 @@ train_tournament(uint32_t pc, uint8_t outcome)
   int local_prediction = local_BHT[val_PHT];
   int global_prediction = global_BHT[GHR];
   int res = selector[GHR];
+  int local_result = NOTTAKEN, global_result = NOTTAKEN;// initial local and global result
+  if(local_prediction > WN) local_result = TAKEN;// check local result
+  if(global_prediction > WN) global_result = TAKEN;// check global result
   if(outcome == TAKEN) {
-    if((local_prediction < WT && global_prediction > WN) || (local_prediction > WN && global_prediction < WT)) { //When only one predictor makes the right prediction, change selector preference
+    if(global_result != local_result) { //if two predictor makes different prediction, prefer the correct one
       if(local_prediction > WN && res > 0) selector[GHR]--;// if only local predictor is right, selector prefers it
       else if(global_prediction > WN && res < 3) selector[GHR]++;// if only global predictor is right, selector prefers it
     } 
@@ -263,7 +266,7 @@ train_tournament(uint32_t pc, uint8_t outcome)
     PHT[(pc & filter_pc)] = ((val_PHT << 1)+1) & filter_pht;// update local pattern history table
     GHR = ((GHR << 1)+1) & filter_ghr; // update global history register
   } else {
-    if((local_prediction < WT && global_prediction > WN) || (local_prediction > WN && global_prediction < WT)) { //When only one predictor makes the right prediction, change selector preference
+    if(global_result != local_result) { //if two predictor makes different prediction, prefer the correct one
       if(local_prediction < WT && res > 0) selector[GHR]--;// if only local predictor is right, selector prefers it
       else if(global_prediction < WT && res < 3) selector[GHR]++;// if only global predictor is right, selector prefers it
     } 
