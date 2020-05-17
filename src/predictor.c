@@ -121,7 +121,7 @@ init_tournament()
 void init_custom() // a simple 2bcgskew predictor
 {
   bimIndexBits = 9;
-  bimBHTBits = 10;
+  bimBHTBits = 12;
   ghBits = 13;
   metaBits = ghBits;
   GHR = 0;
