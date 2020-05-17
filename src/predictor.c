@@ -30,6 +30,10 @@ int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
 int verbose;
 
+  int bimIndexBits;
+  int bimBHTBits;
+  int ghBits;
+  int metaBits;
 //------------------------------------//
 //      Predictor Data Structures     //
 //------------------------------------//
@@ -43,7 +47,11 @@ uint8_t* global_BHT;//global branch history table
 uint32_t* PHT;//pattern history table
 uint8_t* selector;//branch predictor selector
 
-
+uint8_t* g1_BHT;
+uint8_t* g2_BHT;
+uint32_t* bim_PHT;
+uint8_t* bim_BHT;
+uint8_t* meta_selector;
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
@@ -110,9 +118,35 @@ init_tournament()
   }
 }
 
-void init_custom()
+void init_custom() // a simple 2bcgskew predictor
 {
-
+  bimIndexBits = 9;
+  bimBHTBits = 10;
+  ghBits = 13;
+  metaBits = ghBits;
+  GHR = 0;
+  int gBHT_size = pow(2, ghBits);
+  int bimPHT_size = pow(2, bimIndexBits);
+  int bimBHT_size = pow(2, bimBHTBits);
+  int meta_size = pow(2, metaBits);
+  g1_BHT = (uint8_t*)malloc(gBHT_size * sizeof(uint8_t));//initialize global branch history table
+  g2_BHT = (uint8_t*)malloc(gBHT_size * sizeof(uint8_t));//initialize global branch history table
+  bim_BHT = (uint8_t*)malloc(bimBHT_size * sizeof(uint8_t));
+  bim_PHT = (uint32_t*)malloc(bimPHT_size * sizeof(uint32_t));
+  meta_selector = (uint8_t*)malloc(meta_size * sizeof(uint8_t));
+  for(int i = 0; i < gBHT_size; i++){
+    g1_BHT[i] = WN;//initialize all Gshare1 prediction to be Weak NotTaken
+    //g2_BHT[i] = WN;//initialize all Gshare2 prediction to be Weak NotTaken
+  }
+  for(int i = 0; i < meta_size; i++){
+   meta_selector[i] = 2;//0 for strongly BIM, 1 for weakly BIM, 2 for weakly Vote, 3 for strongly Vote
+  }
+  for(int i = 0; i < bimPHT_size; i++){
+    bim_PHT[i] = 0;//initialize all pattern history to be 0
+  }
+  for(int i = 0; i < bimBHT_size; i++){
+    bim_BHT[i] = WN;//initialize all the BIM prediction to be Weak NotTaken
+  }
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -147,10 +181,8 @@ uint8_t
 predict_gshare(uint32_t pc)
 {
   uint32_t filter = 0;//filter to compensate the length difference
-  int i = 0;
-  while(i < ghistoryBits) {
+  for( int i = 0; i < ghistoryBits; i++) {
     filter = (filter<<1) + 1;//initialize filter
-    i++;
   }
   uint32_t res = (pc & filter) ^ (GHR & filter);
   if(global_BHT[res] > WN){
@@ -183,7 +215,29 @@ predict_tournament(uint32_t pc)
 uint8_t
 predict_custom(uint32_t pc)
 {
-
+  uint32_t filter1 = 0;
+  for(int i = 0; i < bimIndexBits; i ++) {
+    filter1 = (filter1 << 1) + 1;
+  }
+  uint32_t filter2 = 0;//filter to compensate the length difference
+  for( int i = 0; i < ghBits; i++) {
+    filter2 = (filter2<<1) + 1;//initialize filter
+  }
+  int res = meta_selector[GHR];
+  int val_PHT = bim_PHT[(pc & filter1)];
+  int bim_prediction = bim_BHT[val_PHT] < WT ? NOTTAKEN : TAKEN;
+  if(res < 2){
+    return bim_prediction;
+  } else {
+    uint32_t idx1 = (pc & filter2) ^ (GHR & filter2);
+    uint32_t idx2 = (pc + GHR) & filter2;
+    int g1_prediction = g1_BHT[idx1] < WT ? NOTTAKEN : TAKEN;
+    //int g2_prediction = g1_BHT[idx2] < WT ? NOTTAKEN : TAKEN;
+    int g2_prediction = g2_BHT[idx2] < WT ? NOTTAKEN : TAKEN;
+    int vote = bim_prediction + g1_prediction + g2_prediction;
+    int prediction = vote > 1 ? TAKEN : NOTTAKEN;
+    return prediction;
+  }
 }
 
 // Train the predictor the last executed branch at PC 'pc' and with
@@ -280,5 +334,50 @@ train_tournament(uint32_t pc, uint8_t outcome)
 void
 train_custom(uint32_t pc, uint8_t outcome)
 {
-
+  uint32_t filter_pc = 0;// filter for pc to compensate length
+  uint32_t filter_pht= 0;// filter for PHT to compensate length
+  uint32_t filter_ghr = 0;// filter for GHT to compensate length
+  for(int i = 0; i < bimIndexBits; i ++) {
+    filter_pc = (filter_pc<<1) + 1;
+  }
+  for(int i = 0; i < bimBHTBits; i ++) {
+    filter_pht = (filter_pht<<1) + 1;
+  }
+  for(int i = 0; i < ghBits; i ++) {
+    filter_ghr = (filter_ghr<<1) + 1;
+  }
+  int val_PHT = bim_PHT[(pc & filter_pc)];
+  int bim_prediction = bim_BHT[val_PHT] < WT ? NOTTAKEN : TAKEN;
+  uint32_t idx = GHR & filter_ghr;
+  uint32_t idx1 = (pc & filter_ghr) ^ (GHR & filter_ghr);
+  uint32_t idx2 = (pc + GHR) & filter_ghr;
+  int g1_prediction = g1_BHT[idx1] < WT ? NOTTAKEN : TAKEN;
+  //int g2_prediction = g1_BHT[idx2] < WT ? NOTTAKEN : TAKEN;
+  int g2_prediction = g2_BHT[idx2] < WT ? NOTTAKEN : TAKEN;
+  int vote = bim_prediction + g1_prediction + g2_prediction;
+  int prediction = vote > 1 ? TAKEN : NOTTAKEN;
+  int res = meta_selector[idx];
+  if(outcome == TAKEN) {
+    if(bim_prediction != prediction) { //if two predictor makes different prediction, prefer the correct one
+      if(bim_prediction == outcome && res > 0) meta_selector[idx]--;// if bim is right, selector prefers it
+      else if(prediction  == outcome && res < 3) meta_selector[idx]++;// if vote is right, selector prefers it
+    } 
+    if(bim_BHT[val_PHT] < ST) bim_BHT[val_PHT]++; // update local BHT
+    if(g1_BHT[idx1] < ST) g1_BHT[idx1]++;// update global BHT
+    //if(g1_BHT[idx2] < ST) g1_BHT[idx2]++;// update global BHT
+    if(g2_BHT[idx2] < ST) g2_BHT[idx2]++;// update global BHT
+    bim_PHT[(pc & filter_pc)] = ((val_PHT << 1)+1) & filter_pht;// update local pattern history table
+    GHR = ((GHR << 1)+1) & filter_ghr; // update global history register
+  } else {
+    if(bim_prediction != prediction) { //if two predictor makes different prediction, prefer the correct one
+      if(bim_prediction == outcome && res > 0) meta_selector[idx]--;// if bim is right, selector prefers it
+      else if(prediction  == outcome && res < 3) meta_selector[idx]++;// if vote is right, selector prefers it
+    } 
+    if(bim_BHT[val_PHT] > SN) bim_BHT[val_PHT]--; // update local BHT
+    if(g1_BHT[idx1] > SN) g1_BHT[idx1]--;// update global BHT
+    //if(g1_BHT[idx2] > SN) g1_BHT[idx2]--;// update global BHT
+    if(g2_BHT[idx2] > SN) g2_BHT[idx2]--;// update global BHT
+    bim_PHT[(pc & filter_pc)] = (val_PHT << 1) & filter_pht;// update local pattern history table
+    GHR = (GHR << 1) & filter_ghr; // update global history register
+  }
 }
