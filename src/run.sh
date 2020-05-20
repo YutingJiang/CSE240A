@@ -1,19 +1,16 @@
 #!/bin/bash
+clear
 make
 echo "Start testing"
-echo "GShare with 13 bits global history:"
+
 for file in $(ls ../traces)
 do
-bunzip2 -kc ../traces/$file |./predictor --gshare:13 | grep "Misprediction Rate:"
-done
-echo "Tournament with 9 bits global history, 10 bits local history, 10 PC bits:"
-for file in $(ls ../traces)
-do
-bunzip2 -kc ../traces/$file |./predictor --tournament:9:10:10 | grep "Misprediction Rate:"
-done
-echo "Custom Predictor:"
-for file in $(ls ../traces)
-do
-bunzip2 -kc ../traces/$file |./predictor --custom | grep "Misprediction Rate:"
+echo "----------------------------------Testing on $file -------------------------------------"
+echo "*GShare 13 bits global history:*************"
+bunzip2 -kc ../traces/$file |./predictor --gshare:13 #| grep "Misprediction Rate:"
+echo "********Tournament :9 bits global history, 10 bits local history, 10 PC bits*********"
+bunzip2 -kc ../traces/$file |./predictor --tournament:9:10:10 #| grep "Misprediction Rate:"
+echo "************Custom Predictor*******************"
+bunzip2 -kc ../traces/$file |./predictor --custom #| grep "Misprediction Rate:"
 done
 make clean
