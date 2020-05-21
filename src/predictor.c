@@ -136,7 +136,7 @@ void init_custom() // a simple 2bcgskew predictor
   meta_selector = (uint8_t*)malloc(meta_size * sizeof(uint8_t));
   for(int i = 0; i < gBHT_size; i++){
     g1_BHT[i] = WN;//initialize all Gshare1 prediction to be Weak NotTaken
-    //g2_BHT[i] = WN;//initialize all Gshare2 prediction to be Weak NotTaken
+    g2_BHT[i] = WN;//initialize all Gshare2 prediction to be Weak NotTaken
   }
   for(int i = 0; i < meta_size; i++){
    meta_selector[i] = 2;//0 for strongly BIM, 1 for weakly BIM, 2 for weakly Vote, 3 for strongly Vote
@@ -357,6 +357,7 @@ train_custom(uint32_t pc, uint8_t outcome)
   int vote = bim_prediction + g1_prediction + g2_prediction;
   int prediction = vote > 1 ? TAKEN : NOTTAKEN;
   int res = meta_selector[idx];
+  int ans = res > 1 ? prediction : bim_prediction;
   if(outcome == TAKEN) {
     if(bim_prediction != prediction) { //if two predictor makes different prediction, prefer the correct one
       if(bim_prediction == outcome && res > 0) meta_selector[idx]--;// if bim is right, selector prefers it
@@ -380,4 +381,50 @@ train_custom(uint32_t pc, uint8_t outcome)
     bim_PHT[(pc & filter_pc)] = (val_PHT << 1) & filter_pht;// update local pattern history table
     GHR = (GHR << 1) & filter_ghr; // update global history register
   }
+
 }
+
+
+
+  // if(outcome == TAKEN) {
+  //   if(bim_prediction != prediction) { //if two predictor makes different prediction, prefer the correct one
+  //     if(bim_prediction == outcome && res > 0) meta_selector[idx]--;// if bim is right, selector prefers it
+  //     else if(prediction  == outcome && res < 3) meta_selector[idx]++;// if vote is right, selector prefers it
+  //   } 
+  //   if(ans != outcome) {
+  //     if(bim_BHT[val_PHT] < ST) bim_BHT[val_PHT]++; // update local BHT
+  //     if(g1_BHT[idx1] < ST) g1_BHT[idx1]++;// update global BHT
+  //     if(g2_BHT[idx2] < ST) g2_BHT[idx2]++;// update global BHT
+  //   } else {
+  //     if(res > 1) {
+  //       if(WN < bim_BHT[val_PHT] < ST) bim_BHT[val_PHT]++; // update local BHT
+  //       if( WN < g1_BHT[idx1] < ST) g1_BHT[idx1]++;// update global BHT
+  //       if(WN < g2_BHT[idx2] < ST) g2_BHT[idx2]++;// update global BHT
+  //     } else {
+  //       if(bim_BHT[val_PHT] < ST) bim_BHT[val_PHT]++; // update local BHT
+  //     }
+  //   }
+  //   bim_PHT[(pc & filter_pc)] = ((val_PHT << 1)+1) & filter_pht;// update local pattern history table
+  //   GHR = ((GHR << 1)+1) & filter_ghr; // update global history register
+  // } else {
+  //   if(bim_prediction != prediction) { //if two predictor makes different prediction, prefer the correct one
+  //     if(bim_prediction == outcome && res > 0) meta_selector[idx]--;// if bim is right, selector prefers it
+  //     else if(prediction  == outcome && res < 3) meta_selector[idx]++;// if vote is right, selector prefers it
+  //   } 
+  //   if(ans != outcome) {
+  //     if(bim_BHT[val_PHT] >SN) bim_BHT[val_PHT]++; // update local BHT
+  //     if(g1_BHT[idx1] > SN) g1_BHT[idx1]++;// update global BHT
+  //     if(g2_BHT[idx2] > SN) g2_BHT[idx2]++;// update global BHT
+  //   } else {
+  //     if(res > 1) {
+  //       if(SN < bim_BHT[val_PHT] < WT) bim_BHT[val_PHT]++; // update local BHT
+  //       if(SN< g1_BHT[idx1] < WT) g1_BHT[idx1]++;// update global BHT
+  //       if(SN < g2_BHT[idx2] < WT) g2_BHT[idx2]++;// update global BHT
+  //     } else {
+  //       if(bim_BHT[val_PHT] > SN) bim_BHT[val_PHT]++; // update local BHT
+  //     }
+  //   }
+  //   bim_PHT[(pc & filter_pc)] = (val_PHT << 1) & filter_pht;// update local pattern history table
+  //   GHR = (GHR << 1) & filter_ghr; // update global history register
+  // }
+
